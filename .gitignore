@@ -1,0 +1,13 @@
+# Python-generated files
+venv/
+.venv/
+__pycache__/
+.env
+*.dll
+*.pyd
+*.so
+*.sqlite
+*.db
+.ipynb_checkpoints/
+.vscode/
+
