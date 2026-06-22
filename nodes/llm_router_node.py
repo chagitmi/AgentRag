@@ -1,3 +1,4 @@
+
 import os
 import json
 from dotenv import load_dotenv
@@ -17,51 +18,105 @@ class LLMRouterNode:
 
     def route(self, user_request):
 
-        prompt = f"""
-You are a strict classification system for an AI agent.
+       prompt = f"""
+You are a strict classification system for a business office AI assistant.
 
-You MUST follow these rules:
-- Output ONLY valid JSON
-- No explanations
-- No extra text
-- No markdown
-- No code blocks
+Your job is to classify the user's request into EXACTLY one route.
 
-Allowed routes:
+You MUST return ONLY valid JSON.
+
+Available routes:
+
+1. logo
+Use when the user asks for:
 - logo
-- signature
-- business_card
-- official_letter
+- company branding
+- company image
+- brand file
 
-User request:
-{user_request}
+Examples:
+"תציג לי לוגו"
+"I need the company logo"
 
-Return EXACTLY in this format:
+-------------------
+
+2. signature
+Use when the user wants to:
+- send an email
+- attach email signature
+- create email footer
+- send message to customer by email
+
+Examples:
+"שלח מייל ללקוח"
+"אני צריכה חתימה למייל"
+"I need email signature"
+
+-------------------
+
+3. business_card
+Use when the user asks for:
+- business card
+- visiting card
+- contact card
+
+Examples:
+"תביא לי כרטיס ביקור"
+
+-------------------
+
+4. official_letter
+Use when the user wants:
+- formal document
+- quotation
+- proposal
+- official company document
+- price offer
+
+Examples:
+"תיצור מסמך רשמי"
+"אני צריכה הצעת מחיר"
+
+-------------------
+
+Important rules:
+
+If the request mentions EMAIL → ALWAYS choose signature.
+
+If the request mentions QUOTE / OFFER / PROPOSAL → choose official_letter.
+
+Return ONLY JSON:
+
 {{
-  "route": "<one of the allowed routes>",
-  "confidence": <number between 0 and 1>
+  "route": "<route>",
+  "confidence": <number>,
+  "asset_query": "<short english query for embedding search>"
 }}
 
-If you are unsure, still choose the closest route.
-"""
-        logger.info("Sending request to OpenAI Router")
+User request:
 
-        response = self.client.responses.create(
+{user_request}
+Return also an asset_query that will be used for vector search.
+"""      
+       logger.info("Sending request to OpenAI Router")
+
+       response = self.client.responses.create(
             model=OPENAI_MODEL,
             input=prompt
         )
 
-        text = response.output_text.strip()
+       text = response.output_text.strip()
 
-        try:
+       try:
             result = json.loads(text)
-        except Exception:
-            # fallback אם ה־LLM לא החזיר JSON תקין
-            return {
-                "route": "unknown",
-                "confidence": 0.0
-            }
-        
-        logger.info(f"Raw model output: {text}")
+       except Exception as e:
+            logger.error(f"JSON parsing error: {e}")
 
-        return result
+            return {
+             "route": "unknown",
+             "confidence": 0.0
+         }
+        
+       logger.info(f"Raw model output: {text}")
+
+       return result

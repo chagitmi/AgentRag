@@ -1,50 +1,109 @@
 import os
+import json
 
-from embedding_model import CLIPEmbeddingModel
-from chroma_manager import ChromaManager
+from PIL import Image
+import chromadb
+from sentence_transformers import SentenceTransformer
 
-from config import (
-    CHROMA_DB_PATH,
-    COLLECTION_NAME,
-    IMAGES_FOLDER,
-    CLIP_MODEL_NAME,
-    CLIP_PRETRAINED
+from open_clip import create_model_and_transforms
+
+
+# =========================
+# Config
+# =========================
+
+IMAGE_FOLDER = "./images"
+METADATA_FOLDER = "./metadata"
+DB_PATH = "./chroma_db"
+
+# =========================
+# Models
+# =========================
+
+text_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+clip_model, _, preprocess = create_model_and_transforms("ViT-B-32", pretrained="laion2b_s34b_b79k")
+
+
+# =========================
+# Chroma DB
+# =========================
+
+client = chromadb.PersistentClient(path=DB_PATH)
+
+collection = client.get_or_create_collection(
+    name="business_assets"
 )
 
 
-def ingest_images():
+# =========================
+# Load metadata
+# =========================
 
-    embedding_model = CLIPEmbeddingModel(
-        model_name=CLIP_MODEL_NAME,
-        pretrained=CLIP_PRETRAINED
-    )
+def load_metadata(file_name):
+    meta_file = file_name.replace(".png", ".json")
 
-    chroma_manager = ChromaManager(
-        db_path=CHROMA_DB_PATH,
-        collection_name=COLLECTION_NAME
-    )
+    path = os.path.join(METADATA_FOLDER, meta_file)
 
-    image_files = os.listdir(IMAGES_FOLDER)
+    if not os.path.exists(path):
+        return {"description": "", "tags": []}
 
-    for image_file in image_files:
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-        image_path = os.path.join(IMAGES_FOLDER, image_file)
 
-        print(f"Ingesting: {image_file}")
+# =========================
+# Build embedding
+# =========================
 
-        embedding = embedding_model.encode_image(image_path)
+def build_text_embedding(metadata):
+    text = metadata.get("description", "") + " " + " ".join(metadata.get("tags", []))
+    return text_model.encode(text).tolist()
 
-        chroma_manager.add_image(
-            image_id=image_file,
-            embedding=embedding,
-            metadata={
-                "image_path": image_path
-            }
+
+# =========================
+# Ingest
+# =========================
+
+def ingest():
+
+    for img_file in os.listdir(IMAGE_FOLDER):
+
+        if not img_file.endswith(".png"):
+            continue
+
+        img_path = os.path.join(IMAGE_FOLDER, img_file)
+
+        metadata = load_metadata(img_file)
+
+        # ---- IMAGE embedding (CLIP)
+        image = preprocess(Image.open(img_path)).unsqueeze(0)
+        image_embedding = clip_model.encode_image(image).detach().numpy()[0].tolist()
+
+        # ---- TEXT embedding (metadata)
+        text_embedding = build_text_embedding(metadata)
+
+        # ---- combine embeddings
+        combined_embedding = [
+            (a + b) / 2
+            for a, b in zip(image_embedding, text_embedding)
+        ]
+
+        collection.add(
+            embeddings=[combined_embedding],
+            ids=[img_file],
+            documents=[metadata.get("description", "")],
+            metadatas=[{
+                "file": img_file,
+                "type": metadata.get("type"),
+                "tags": json.dumps(metadata.get("tags", []), ensure_ascii=False),
+                "description": metadata.get("description", "")
+            }],
+            ids=[img_file]
         )
 
-    print("Finished ingesting images.")
+        print(f"Ingested: {img_file}")
 
 
 if __name__ == "__main__":
-
-    ingest_images()
+    ingest()

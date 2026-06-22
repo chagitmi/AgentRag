@@ -29,7 +29,8 @@ class ImageRetriever:
 
         results = self.chroma_manager.collection.query(
             query_embeddings=[query_embedding],
-            n_results=top_k
+            n_results=top_k,
+           
         )
 
         ids = results["ids"][0]
@@ -40,7 +41,13 @@ class ImageRetriever:
 
         for i in range(len(ids)):
 
+
             similarity = 1 / (1 + distances[i])
+
+            # boost exact keyword match
+            if any(word in query.lower() for word in ["logo", "חתימה", "signature"]):
+                if "לוגו" in ids[i] or "חתימה" in ids[i]:
+                    similarity += 0.1
 
             formatted_results.append({
                 "id": ids[i],

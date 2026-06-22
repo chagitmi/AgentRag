@@ -7,12 +7,28 @@ class AssetWorkerNode:
     def __init__(self):
         self.tool = AssetSearchTool()
 
-    def execute(self, query):
-
-        logger.info(f"Searching assets for query: {query}")
-
+    def execute(self, route, query):
+        logger.info(f"Route: {route}")
+        logger.info(f"Search Query: {query}")
+       
         result = self.tool.search_business_asset(query)
 
-        logger.info(f"Search result: {result}")
-
         return result
+
+    def build_search_query(
+        self,
+        user_request,
+        route
+    ):
+
+        mapping = {
+            "email_signature": "email signature",
+            "official_letter": "official document signature",
+            "business_card": "business card logo",
+            "logo": "company logo"
+        }
+
+        if route in mapping:
+            return mapping[route]
+
+        return user_request

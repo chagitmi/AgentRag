@@ -28,12 +28,27 @@ confidence = route_result["confidence"]
 #     print(clarification)
 
 #     exit()
+from utils.query_builder import build_asset_query
 
-worker_result = worker.execute(user_request)
+asset_query = build_asset_query(user_request, route_result["route"])
+
+logger.info(f"Final Asset Query: {asset_query}")
+
+worker_result = worker.execute(
+    route_result["route"],
+    asset_query
+)
+
+#worker_result = worker.execute(
+#    route_result["asset_query"]  
+#)
 
 if worker_result.get("found"):
-    image_path = worker_result["image_path"]
     
+    image_path = worker_result.get("image_path")
+
+if image_path:
+    image_path = image_path = "/static/images/" + image_path.split("\\")[-1]
     logger.info(f"Opening image: {image_path}")
     
     os.startfile(image_path)
