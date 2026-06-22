@@ -139,7 +139,8 @@ function copyText() {
 @app.route("/", methods=["GET", "POST"])
 def home():
     response = None
-
+    user_message = ""
+    
     if request.method == "POST":
         user_message = request.form["message"]
 
